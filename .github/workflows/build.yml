@@ -62,8 +62,8 @@ jobs:
           rm -rf AnyKernel3/.git AnyKernel3/README.md
           sed -i 's/device.name1=.*/device.name1=peridot/' AnyKernel3/anykernel.sh
           sed -i 's/device.name2=.*/device.name2=POCO F6/' AnyKernel3/anykernel.sh
-          sed -i 's/block=auto/block=\/dev\/block\/bootdevice\/by-name\/boot/' AnyKernel3/anykernel.sh
-          sed -i 's/is_slot_device=auto/is_slot_device=1/' AnyKernel3/anykernel.sh
+          sed -i 's/block=auto/block=boot/' AnyKernel3/anykernel.sh
+          sed -i 's/is_slot_device=auto/is_slot_device=auto/' AnyKernel3/anykernel.sh
           cp android-kernel/out/dist/Image AnyKernel3/
           cd AnyKernel3
           zip -r9 ../AnyKernel3-GKI-KSU-Next-SUSFS.zip *
