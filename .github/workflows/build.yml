@@ -1,0 +1,71 @@
+name: Build GKI Kernel with KSU-Next and SuSFS
+
+on:
+  workflow_dispatch:
+    inputs:
+      ksu_next_version:
+        description: 'Tag do KernelSU-Next'
+        required: true
+        default: 'next'
+      susfs_branch:
+        description: 'Branch do SuSFS'
+        required: true
+        default: 'gki-android14-6.1'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aumentar espaco em disco
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 8192
+          temp-reserve-mb: 2048
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+
+      - name: Instalar dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev libncurses5-dev libgl1-mesa-dev libxml2-utils xsltproc bc libssl-dev libfl-dev python3 repo
+
+      - name: Baixar codigo-fonte GKI (android14-6.1)
+        run: |
+          mkdir android-kernel && cd android-kernel
+          repo init -u https://android.googlesource.com/kernel/manifest -b common-android14-6.1 --depth=1
+          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+
+      - name: Integrar KernelSU-Next
+        run: |
+          cd android-kernel/common
+          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s ${{ github.event.inputs.ksu_next_version }}
+
+      - name: Aplicar patches do SuSFS
+        run: |
+          cd android-kernel
+          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b ${{ github.event.inputs.susfs_branch }}
+          cp susfs4ksu/kernel_patches/fs/* common/fs/
+          cp susfs4ksu/kernel_patches/include/linux/* common/include/linux/
+          cd common
+          git apply ../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch || true
+          git apply ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch || true
+
+      - name: Compilar Kernel GKI
+        run: |
+          cd android-kernel
+          LTO=thin tools/bazel run --config=fast //common:kernel_aarch64_dist -- --dist_dir=out/dist
+
+      - name: Empacotar com AnyKernel3
+        run: |
+          git clone https://github.com/osm0sis/AnyKernel3.git
+          rm -rf AnyKernel3/.git AnyKernel3/README.md
+          cp android-kernel/out/dist/Image AnyKernel3/
+          cd AnyKernel3
+          zip -r9 ../AnyKernel3-GKI-KSU-Next-SUSFS.zip *
+
+      - name: Upload do Kernel Flashavel
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnyKernel3-GKI-KSU-Next-SUSFS
+          path: AnyKernel3-GKI-KSU-Next-SUSFS.zip
